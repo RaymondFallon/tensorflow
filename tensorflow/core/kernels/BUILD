@@ -288,6 +288,15 @@ tf_kernel_library(
     ],
 )
 
+tf_kernel_library(
+    name = "map_stage_op",
+    srcs = ["map_stage_op.cc"],
+    deps = [
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+    ],
+)
+
 cc_library(
     name = "queue_base",
     srcs = ["queue_base.cc"],
@@ -1315,6 +1324,7 @@ cc_library(
         ":fifo_queue_op",
         ":lookup_table_init_op",
         ":lookup_table_op",
+        ":map_stage_op",
         ":padding_fifo_queue_op",
         ":priority_queue_op",
         ":queue_ops",
@@ -1334,6 +1344,11 @@ cc_library(
         ":lookup_table_init_op",
         ":lookup_table_op",
     ],
+)
+
+cc_header_only_library(
+    name = "lookup_headers_lib",
+    deps = [":lookup"],
 )
 
 DATA_FLOW_DEPS = [
@@ -3169,6 +3184,7 @@ cc_library(
         ":sparse_concat_op",
         ":sparse_cross_op",
         ":sparse_dense_binary_op_shared",
+        ":sparse_fill_empty_rows_op",
         ":sparse_reduce_sum_op",
         ":sparse_reorder_op",
         ":sparse_reshape_op",
@@ -3209,6 +3225,12 @@ tf_kernel_library(
 tf_kernel_library(
     name = "sparse_concat_op",
     prefix = "sparse_concat_op",
+    deps = SPARSE_DEPS,
+)
+
+tf_kernel_library(
+    name = "sparse_fill_empty_rows_op",
+    prefix = "sparse_fill_empty_rows_op",
     deps = SPARSE_DEPS,
 )
 
@@ -4089,7 +4111,6 @@ filegroup(
         "tensor_array.h",
         "tile_ops_cpu_impl.h",
         "tile_ops_impl.h",
-        "topk_op.h",
         "training_op_helpers.h",
         "training_ops.h",
         "transpose_functor.h",
@@ -4252,6 +4273,7 @@ filegroup(
         "quantize_down_and_shrink_range.cc",
         "quantize_op.cc",
         "quantized_activation_ops.cc",
+        "quantized_add_op.cc",
         "quantized_batch_norm_op.cc",
         "quantized_bias_add_op.cc",
         "quantized_concat_op.cc",
@@ -4364,6 +4386,7 @@ tf_kernel_library(
         "quantize_down_and_shrink_range.cc",
         "quantize_op.cc",
         "quantized_activation_ops.cc",
+        "quantized_add_op.cc",
         "quantized_batch_norm_op.cc",
         "quantized_bias_add_op.cc",
         "quantized_concat_op.cc",
@@ -4467,6 +4490,48 @@ tf_cc_test(
     ],
 )
 
+# Android-only test for quantization utilities.
+cc_binary(
+    name = "quantization_utils_test_android_only",
+    testonly = 1,
+    srcs = ["quantization_utils_test.cc"],
+    copts = tf_copts(),
+    linkopts = select({
+        "//tensorflow:android": [
+            "-lm",
+            "-llog",
+            "-pie",
+            "-std=c++11",
+        ],
+        "//conditions:default": [],
+    }),
+    linkstatic = 1,
+    tags = [
+        "manual",
+        "notap",
+    ],
+    deps = [
+    ] + select({
+        "//tensorflow:android": [
+            ":android_tensorflow_kernels",
+            "//tensorflow/core:android_tensorflow_lib",
+            "//tensorflow/core:android_tensorflow_test_lib",
+        ],
+        "//conditions:default": [
+            ":quantized_ops",
+            "//third_party/eigen3",
+            "//tensorflow/core:core_cpu_internal",
+            "//tensorflow/core:lib",
+            "//tensorflow/core:test",
+            "//tensorflow/cc:cc_ops",
+            "//tensorflow/cc:client_session",
+            "//tensorflow/core:framework",
+            "//tensorflow/core:tensor_testutil",
+            "//tensorflow/core:test_main",
+        ],
+    }),
+)
+
 tf_cc_test(
     name = "quantized_activation_ops_test",
     srcs = ["quantized_activation_ops_test.cc"],
@@ -4475,6 +4540,72 @@ tf_cc_test(
         ":ops_util",
         ":quantized_ops",
         "//tensorflow/core:array_ops_op_lib",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:math_ops_op_lib",
+        "//tensorflow/core:nn_ops_op_lib",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core:test",
+        "//tensorflow/core:test_main",
+        "//tensorflow/core:testlib",
+    ],
+)
+
+# Android-only test for quantized addition.
+cc_binary(
+    name = "quantized_add_op_test_android_only",
+    testonly = 1,
+    srcs = ["quantized_add_op_test.cc"],
+    copts = tf_copts(),
+    linkopts = select({
+        "//tensorflow:android": [
+            "-lm",
+            "-llog",
+            "-pie",
+            "-std=c++11",
+        ],
+        "//conditions:default": [],
+    }),
+    linkstatic = 1,
+    tags = [
+        "manual",
+        "notap",
+    ],
+    deps = [
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/cc:client_session",
+    ] + select({
+        "//tensorflow:android": [
+            ":android_tensorflow_kernels",
+            "//tensorflow/core:android_tensorflow_lib",
+            "//tensorflow/core:android_tensorflow_test_lib",
+        ],
+        "//conditions:default": [
+            ":ops_util",
+            ":quantized_ops",
+            "//tensorflow/core:framework",
+            "//tensorflow/core:protos_all_cc",
+            "//tensorflow/core:tensor_testutil",
+            "//tensorflow/core:tensorflow",
+            "//tensorflow/core:test",
+            "//tensorflow/core:test_main",
+        ],
+    }),
+)
+
+tf_cc_test(
+    name = "quantized_add_op_test",
+    size = "small",
+    srcs = ["quantized_add_op_test.cc"],
+    deps = [
+        ":math",
+        ":ops_testutil",
+        ":ops_util",
+        ":quantized_ops",
+        "//tensorflow/cc:cc_ops",
+        "//tensorflow/cc:client_session",
+        "//tensorflow/core:array_ops_op_lib",
+        "//tensorflow/core:core_cpu",
+        "//tensorflow/core:direct_session",
         "//tensorflow/core:framework",
         "//tensorflow/core:math_ops_op_lib",
         "//tensorflow/core:nn_ops_op_lib",
@@ -4563,7 +4694,7 @@ tf_cc_test(
     ],
 )
 
-# Android-only test for quantized instance norm.
+# Android-only test for quantized multiply.
 cc_binary(
     name = "quantized_mul_op_test_android_only",
     testonly = 1,
@@ -4589,9 +4720,13 @@ cc_binary(
             "//tensorflow/core:android_tensorflow_test_lib",
         ],
         "//conditions:default": [
+            ":ops_util",
+            ":quantized_ops",
             "//tensorflow/core:framework",
             "//tensorflow/core:tensor_testutil",
             "//tensorflow/core:test_main",
+            "//tensorflow/core:protos_all_cc",
+            "//tensorflow/core:test",
         ],
     }),
 )
@@ -4755,11 +4890,14 @@ tf_cc_test(
 
 tf_kernel_library(
     name = "remote_fused_graph_ops",
-    prefix = "remote_fused_graph_ops",
+    prefix = "remote_fused_graph_execute_op",
     deps = [
         ":remote_fused_graph_execute_op",
+        ":remote_fused_graph_execute_utils",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
+        "//tensorflow/core:lib_internal",
+        "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:remote_fused_graph_ops_op_lib",
     ],
 )
